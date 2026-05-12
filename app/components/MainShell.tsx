@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { FactPanel } from "@/app/components/FactPanel";
-import { ScriptPanel } from "@/app/components/ScriptPanel";
+import { FactPanel } from "./FactPanel";
+import { ScriptPanel } from "./ScriptPanel";
 
 type TabId = "script" | "fact";
 
