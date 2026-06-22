@@ -1,12 +1,18 @@
-export type FactCategory = "character" | "relationship" | "event" | "world";
+"use client";
 
-export type StoredFact = {
-  id: string;
-  createdAt: number;
-  category: FactCategory;
-  content: string;
-  evidence: string;
-};
+export const STORAGE_KEY = "script-analyzer:facts:v1";
+export const CHARACTERS_KEY = "script-analyzer:characters:v1";
+export const COMMON_ID = "common";
+export const COMMON_LABEL = "공통";
+
+export const FACT_CATEGORIES = [
+  "character",
+  "relationship",
+  "event",
+  "world",
+] as const;
+
+export type FactCategory = (typeof FACT_CATEGORIES)[number];
 
 export const FACT_CATEGORY_LABELS: Record<FactCategory, string> = {
   character: "캐릭터",
@@ -15,44 +21,79 @@ export const FACT_CATEGORY_LABELS: Record<FactCategory, string> = {
   world: "세계관",
 };
 
-export const FACT_CATEGORIES: FactCategory[] = [
-  "character",
-  "relationship",
-  "event",
-  "world",
-];
+export type Character = {
+  id: string;
+  name: string;
+  createdAt: number;
+};
 
-const STORAGE_KEY = "script-analyzer:facts:v1";
+export type StoredFact = {
+  id: string;
+  createdAt: number;
+  category: FactCategory;
+  content: string;
+  evidence: string;
+  characterId: string;
+};
 
-function isFactCategory(x: unknown): x is FactCategory {
+export function createFactId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `fact-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function createCharacterId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `char-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isFactCategory(value: unknown): value is FactCategory {
   return (
-    x === "character" ||
-    x === "relationship" ||
-    x === "event" ||
-    x === "world"
+    typeof value === "string" &&
+    (FACT_CATEGORIES as readonly string[]).includes(value)
   );
 }
 
-function isStoredFact(x: unknown): x is StoredFact {
-  if (typeof x !== "object" || x === null) return false;
-  const o = x as Record<string, unknown>;
+function isValidFact(value: unknown): value is StoredFact {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
   return (
-    typeof o.id === "string" &&
-    typeof o.createdAt === "number" &&
-    isFactCategory(o.category) &&
-    typeof o.content === "string" &&
-    typeof o.evidence === "string"
+    typeof v.id === "string" &&
+    typeof v.createdAt === "number" &&
+    isFactCategory(v.category) &&
+    typeof v.content === "string" &&
+    typeof v.evidence === "string"
   );
 }
 
+function isValidCharacter(value: unknown): value is Character {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    typeof v.name === "string" &&
+    typeof v.createdAt === "number"
+  );
+}
+
+/** 옛 데이터(characterId 없음)는 모두 "공통"으로 취급합니다. */
 export function loadFacts(): StoredFact[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isStoredFact);
+    return parsed.filter(isValidFact).map((f) => ({
+      ...f,
+      characterId:
+        typeof (f as StoredFact).characterId === "string"
+          ? (f as StoredFact).characterId
+          : COMMON_ID,
+    }));
   } catch {
     return [];
   }
@@ -60,12 +101,31 @@ export function loadFacts(): StoredFact[] {
 
 export function saveFacts(facts: StoredFact[]): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(facts));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(facts));
+  } catch {
+    // 저장 실패는 조용히 무시 (예: 용량 초과)
+  }
 }
 
-export function createFactId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+export function loadCharacters(): Character[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CHARACTERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isValidCharacter);
+  } catch {
+    return [];
   }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function saveCharacters(characters: Character[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters));
+  } catch {
+    // 저장 실패는 조용히 무시
+  }
 }
